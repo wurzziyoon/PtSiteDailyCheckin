@@ -44,35 +44,37 @@ const supportCheckinList=[
         "url":"pt.soulvoice.club",
         "action":async function(obj){
             //https://pt.soulvoice.club/attendance.php
-            const options = {
-            "url": `https://pt.soulvoice.club/attendance.php`,
-            "method":"GET",
-            "headers": {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Accept-Language": "zh-CN,zh;q=0.9",
-                "Cookie": obj.cookie,
-                "Referer": "https://pt.soulvoice.club/torrents.php",
-                "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                "Upgrade-Insecure-Requests":  "1"
-                },
-            };
-            
-            await request(setProxy(options), (err, resp, data) => {
-                let result="";
-                try {
-                    if (err) {                        
-                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
-                    } else {
-                        result=`[${obj.name}] Checkin successfully!`;
+            return new Promise(resolve => {
+                const options = {
+                "url": `https://pt.soulvoice.club/attendance.php`,
+                "method":"GET",
+                "headers": {
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Accept-Language": "zh-CN,zh;q=0.9",
+                    "Cookie": obj.cookie,
+                    "Referer": "https://pt.soulvoice.club/torrents.php",
+                    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "Upgrade-Insecure-Requests":  "1"
+                    },
+                };
+                
+                request(setProxy(options), (err, resp, data) => {
+                    let result="";
+                    try {
+                        if (err) {                        
+                            result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
+                        } else {
+                            result=`[${obj.name}] Checkin successfully!`;
+                        }
+                    } catch (e) {
+                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
+                    } finally{
+                        console.log(result);
+                         resolve(result);
                     }
-                } catch (e) {
-                     result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
-                } finally{
-                    console.log(result);
-                }
-                return result;
-            });
+                });}
+            );
         
         }
     },
@@ -81,32 +83,34 @@ const supportCheckinList=[
         "url":"carpt.net",
         "action":async function(obj){
             //https://carpt.net/attendance.php
-            const options = {
-            "url": `https://carpt.net/attendance.php`,
-            "headers": {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Accept-Language": "zh-cn",
-                "Connection": "keep-alive",
-                "Cookie": obj.cookie,
-                "Referer": "https://carpt.net/torrents.php",
-                "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-                }
-            };
-            await request(setProxy(options), (err, resp, data) => {
-                let result="";
-                try {
-                    if (err) {                        
-                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
-                    } else {
-                        result=`[${obj.name}] Checkin successfully!`;
+            return new Promise(resolve => {
+                const options = {
+                "url": `https://carpt.net/attendance.php`,
+                "headers": {
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Accept-Language": "zh-cn",
+                    "Connection": "keep-alive",
+                    "Cookie": obj.cookie,
+                    "Referer": "https://carpt.net/torrents.php",
+                    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
                     }
-                } catch (e) {
-                     result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
-                } finally{
-                    console.log(result);
-                }
-                return result;
+                };
+                request(setProxy(options), (err, resp, data) => {
+                    let result="";
+                    try {
+                        if (err) {                        
+                            result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
+                        } else {
+                            result=`[${obj.name}] Checkin successfully!`;
+                        }
+                    } catch (e) {
+                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
+                    } finally{
+                        console.log(result);
+                        resolve(result);
+                    }
+                });
             });
         }
     },
@@ -122,13 +126,13 @@ const ENV_CONFIG_PREFIX="PT_DAILY_CHECKIN_CK_";
             const checkinItem = supportCheckinList.filter(t=>t.name === taskName);
             if(checkinItem){
                 checkinItem[0].cookie=allConfig[configItem];
-                checkinResult+= `${await checkin(checkinItem[0])}!<br/>`;
+                checkinResult += `${await checkin(checkinItem[0])}!<br/>`;
             }
             
         }
     }
-
-    notify.sendNotify(`PT站每日签到`, `${checkinResult}`);
+    
+    notify.sendNotify(`PT站每日签到`, checkinResult);
 })();
 
 async function checkin({name,url,action,cookie}){
