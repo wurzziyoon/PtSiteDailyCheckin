@@ -6,37 +6,120 @@ update：2024/02/18
 
 */
 
-// export PT_DAILY_CHECKIN_PROXY        若需要签到走代理请配置该项
-// export PT_DAILY_CHECKIN_CK_HDSKY     hdsky站cookie  hdsky暂时不支持
+// export PT_DAILY_CHECKIN_PROXY        若需要签到走代理请配置该项(e.g. http://192.168.xx.xx:8088）
+// export PT_DAILY_CHECKIN_OCR_SERVER   hdsky验证码解析接口(e.g. http://192.168.xx.xx:8094）
+// export PT_DAILY_CHECKIN_CK_HDSKY     hdsky站cookie
 // export PT_DAILY_CHECKIN_CK_SOULVOICE 聆音站cookie
 // export PT_DAILY_CHECKIN_CK_CARPT     carpt站cookie
 
 const $ = new Env('PtSiteDailyCheckin');
 const request = require('request');
 const notify = $.isNode() ? require('../sendNotify') : '';
-const fs = require('fs');
-const path = require('path');
-const mimeType = require('mime-types');
+
+
 const supportCheckinList=[
     {
         "name":"hdsky",
         "url":"hdsky.me",
-        "action":function(){
-            //generate image code
-            //https://hdsky.me/image_code_ajax.php  POST
-            //application/x-www-form-urlencoded; charset=UTF-8
-            //request: action=new
-            //response: {"success": true,"code": "fc3435f28da408f25f328385f3168883"}
-
-            //get image code
-            //https://hdsky.me/image.php?action=regimage&imagehash=fc3435f28da408f25f328385f3168883 GET
-            //code=41c227
-
-            //checkin
-            //https://hdsky.me/showup.php
-            //request: action=showup&imagehash=fc3435f28da408f25f328385f3168883&imagestring=41c227  POST
-            //response: {"success": true,"message": 10}
-
+        "action":async function(obj){
+            return new Promise((resolve,reject) => {
+                //generate image code
+                //https://hdsky.me/image_code_ajax.php  POST
+                //application/x-www-form-urlencoded; charset=UTF-8
+                //request: action=new
+                //response: {"success": true,"code": "fc3435f28da408f25f328385f3168883"}
+                const options = {
+                "url": `https://hdsky.me/image_code_ajax.php`,
+                "method":"POST",
+                "async":false,
+                "headers": {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Cookie": obj.cookie,
+                    "Referer": "https://hdsky.me/index.php",
+                    "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    },
+                    "body": "action=new"
+                };
+                request(setOptions(options), (err, resp, data) => {
+                    let result="";
+                    try {
+                        if (err) {                        
+                            reject(`[${obj.name}] Checkin(Get Image) failed! ${JSON.stringify(err)}`);
+                        } else {
+                            data=JSON.parse(data);
+                            if(data.success){
+                                resolve(data.code);
+                            }else{
+                                reject(`[${obj.name}] Checkin(Get Image) failed! ${JSON.stringify(data)}`);
+                            }
+                        }
+                    } catch (e) {
+                        reject(`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`);
+                    } 
+                });
+            }).then((imageHash)=>{
+                return new Promise((ihResolve,ihReject) => {
+                    const imageUrl=`https://hdsky.me/image.php?action=regimage&imagehash=${imageHash}`;
+                                //console.log(imagehash);
+                                result=imageUrl;
+                                const getCodeOptions = {
+                                    "url": `/ocr/ddddocr/url/text`,
+                                    "method":"POST",
+                                    "async":false,
+                                    "headers": {
+                                        "Content-Type": "text/plain",
+                                        "Preprocessing":"1",
+                                        "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                                        },
+                                    "body": imageUrl,
+                                };
+                    setOptions(getCodeOptions);
+                    getCodeOptions.url= `${getCodeOptions.ocrServer}${getCodeOptions.url}`;
+                    request(getCodeOptions , (err, resp, data) => {
+                        //console.debug(data);
+                         if (err) {         
+                            ihReject(`[${obj.name}] Checkin(Get Image Code) failed! ${JSON.stringify(err)}`);
+                        }
+                        else{
+                            ihResolve({"imageHash":imageHash,"imageCode":data});
+                        }
+                    });
+                });
+            }).then((data)=>{
+                return new Promise((ciResolve,ciReject) => {
+                    const checkInOptions = {
+                        "url": `https://hdsky.me/showup.php`,
+                        "method":"POST",
+                        "async":false,
+                        "headers": {
+                            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                            "Cookie": obj.cookie,
+                            "Referer": "https://hdsky.me/index.php",
+                            "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                            },
+                            "body": `action=showup&imagehash=${data.imageHash}&imagestring=${data.imageCode}`
+                    };
+                    
+                    request(setOptions(checkInOptions), (err, resp, data) => {
+                        //console.log(checkInOptions.body,data)
+                        if (err) {         
+                            ciReject(`[${obj.name}] Checkin(Get Image Code) failed! ${JSON.stringify(err)}`);
+                        }
+                        else{
+                            data=JSON.parse(data);
+                            if(data.success){
+                                ciResolve(`[${obj.name}] Checkin successfully!`);                                                    
+                            }
+                            else{
+                                ciResolve(`[${obj.name}] Checkin(Checkin) failed!${JSON.stringify(data)}`);
+                            }
+                        }
+                    });
+                });
+            }).catch(e=>{
+                console.log(e);
+                return e;
+            })
         }
     },
     {
@@ -44,7 +127,7 @@ const supportCheckinList=[
         "url":"pt.soulvoice.club",
         "action":async function(obj){
             //https://pt.soulvoice.club/attendance.php
-            return new Promise(resolve => {
+            return new Promise((resolve,reject) => {
                 const options = {
                 "url": `https://pt.soulvoice.club/attendance.php`,
                 "method":"GET",
@@ -59,20 +142,16 @@ const supportCheckinList=[
                     },
                 };
                 
-                request(setProxy(options), (err, resp, data) => {
-                    let result="";
+                request(setOptions(options), (err, resp, data) => {
                     try {
                         if (err) {                        
-                            result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
+                            resolve(`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`);
                         } else {
-                            result=`[${obj.name}] Checkin successfully!`;
+                            resolve(`[${obj.name}] Checkin successfully!`);
                         }
                     } catch (e) {
-                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
-                    } finally{
-                        console.log(result);
-                         resolve(result);
-                    }
+                        reject(`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`);
+                    } 
                 });}
             );
         
@@ -83,7 +162,7 @@ const supportCheckinList=[
         "url":"carpt.net",
         "action":async function(obj){
             //https://carpt.net/attendance.php
-            return new Promise(resolve => {
+            return new Promise((resolve,reject) => {
                 const options = {
                 "url": `https://carpt.net/attendance.php`,
                 "headers": {
@@ -96,20 +175,16 @@ const supportCheckinList=[
                     "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
                     }
                 };
-                request(setProxy(options), (err, resp, data) => {
-                    let result="";
+                request(setOptions(options), (err, resp, data) => {
                     try {
                         if (err) {                        
-                            result=`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`;
+                            resolve(`[${obj.name}] Checkin failed! ${JSON.stringify(err)}`);
                         } else {
-                            result=`[${obj.name}] Checkin successfully!`;
+                            resolve(`[${obj.name}] Checkin successfully!`);
                         }
                     } catch (e) {
-                        result=`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`;
-                    } finally{
-                        console.log(result);
-                        resolve(result);
-                    }
+                        reject(`[${obj.name}] Checkin failed! ${JSON.stringify(e)}`);
+                    } 
                 });
             });
         }
@@ -126,23 +201,29 @@ const ENV_CONFIG_PREFIX="PT_DAILY_CHECKIN_CK_";
             const checkinItem = supportCheckinList.filter(t=>t.name === taskName);
             if(checkinItem){
                 checkinItem[0].cookie=allConfig[configItem];
-                checkinResult += `${await checkin(checkinItem[0])}!<br/>`;
+                checkinResult += `${await checkin(checkinItem[0])}<br/><br/><br/>`;
             }
             
         }
     }
-    
+
+    console.log(checkinResult);
     notify.sendNotify(`PT站每日签到`, checkinResult);
+
 })();
 
 async function checkin({name,url,action,cookie}){
     return await action({name,url,action,cookie});    
 }
 
-function setProxy(options){
+function setOptions(options){
     if(allConfig["PT_DAILY_CHECKIN_PROXY"]){
         options.proxy=allConfig["PT_DAILY_CHECKIN_PROXY"];
     }
+    if(allConfig["PT_DAILY_CHECKIN_OCR_SERVER"]){
+        options.ocrServer=allConfig["PT_DAILY_CHECKIN_OCR_SERVER"];
+    }
+    
     return options;
 }
 
