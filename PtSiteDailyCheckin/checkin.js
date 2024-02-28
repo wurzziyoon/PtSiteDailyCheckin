@@ -16,13 +16,18 @@ const $ = new Env('PtSiteDailyCheckin');
 const request = require('request');
 const notify = $.isNode() ? require('../sendNotify') : '';
 
+const RETRY_TIMES=3;
 
 const supportCheckinList=[
     {
         "name":"hdsky",
         "url":"hdsky.me",
+        "retryTimes":RETRY_TIMES,
         "action":async function(obj){
             return new Promise((resolve,reject) => {
+                if(!checkRetryTimes(obj)){
+                    reject(`[${obj.name}] Checkin failed!Check in exceeded retry count!`);
+                }
                 //generate image code
                 //https://hdsky.me/image_code_ajax.php  POST
                 //application/x-www-form-urlencoded; charset=UTF-8
@@ -111,7 +116,14 @@ const supportCheckinList=[
                                 ciResolve(`[${obj.name}] Checkin successfully!`);                                                    
                             }
                             else{
-                                ciResolve(`[${obj.name}] Checkin(Checkin) failed!${JSON.stringify(data)}`);
+                                if(data.message === "invalid_imagehash"){
+                                    obj.retryTimes = obj.retryTimes-1;
+                                    console.log(`[${obj.name}] Checkin(Checkin) failed! Starting checkin again (${obj.retryTimes})...`);
+                                    return obj.action(obj);
+                                }
+                                else{
+                                    ciResolve(`[${obj.name}] Checkin(Checkin) failed!${JSON.stringify(data)}`);
+                                }
                             }
                         }
                     });
@@ -125,9 +137,13 @@ const supportCheckinList=[
     {
         "name":"soulvoice",
         "url":"pt.soulvoice.club",
+        "retryTimes":RETRY_TIMES,
         "action":async function(obj){
             //https://pt.soulvoice.club/attendance.php
             return new Promise((resolve,reject) => {
+                if(!checkRetryTimes(obj)){
+                    reject(`[${obj.name}] Checkin failed!Check in exceeded retry count!`);
+                }
                 const options = {
                 "url": `https://pt.soulvoice.club/attendance.php`,
                 "method":"GET",
@@ -160,9 +176,13 @@ const supportCheckinList=[
     {
         "name":"carpt",
         "url":"carpt.net",
+        "retryTimes":RETRY_TIMES,
         "action":async function(obj){
             //https://carpt.net/attendance.php
             return new Promise((resolve,reject) => {
+                if(!checkRetryTimes(obj)){
+                    reject(`[${obj.name}] Checkin failed!Check in exceeded retry count!`);
+                }
                 const options = {
                 "url": `https://carpt.net/attendance.php`,
                 "headers": {
@@ -201,6 +221,7 @@ const ENV_CONFIG_PREFIX="PT_DAILY_CHECKIN_CK_";
             const checkinItem = supportCheckinList.filter(t=>t.name === taskName);
             if(checkinItem){
                 checkinItem[0].cookie=allConfig[configItem];
+                //console.log(checkinItem[0])
                 checkinResult += `${await checkin(checkinItem[0])}<br/><br/><br/>`;
             }
             
@@ -212,8 +233,15 @@ const ENV_CONFIG_PREFIX="PT_DAILY_CHECKIN_CK_";
 
 })();
 
-async function checkin({name,url,action,cookie}){
-    return await action({name,url,action,cookie});    
+async function checkin(obj){
+    return await obj.action(obj);    
+}
+
+function checkRetryTimes(obj){
+    if(obj && obj.retryTimes != undefined && obj.retryTimes<0){
+        return  false;
+    }
+    return true;
 }
 
 function setOptions(options){
@@ -223,7 +251,6 @@ function setOptions(options){
     if(allConfig["PT_DAILY_CHECKIN_OCR_SERVER"]){
         options.ocrServer=allConfig["PT_DAILY_CHECKIN_OCR_SERVER"];
     }
-    
     return options;
 }
 
